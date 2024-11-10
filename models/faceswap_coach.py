@@ -247,13 +247,13 @@ class FaceSwapCoach:
         in_name, out_name = str(args.from_index), str(args.to_index)
         name = in_name + '_' + out_name
 
-        in_image = load_image(osp.join(args.dataroot, 'final_crops', in_name + '.jpg'), self.device)
+        in_image = load_image(osp.join(args.dataroot, 'final_crops', in_name + '.jpg'), self.device)    # [-1, 1]의 범위
         out_image = load_image(osp.join(args.dataroot, 'final_crops', out_name + '.jpg'), self.device)
 
         in_cp = load_parameter(osp.join(args.dataroot, 'camera_pose', in_name + '.npy'), self.device)
         out_cp = load_parameter(osp.join(args.dataroot, 'camera_pose', out_name + '.npy'), self.device)
 
-        in_img = (in_image.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255).to(torch.uint8)
+        in_img = (in_image.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255).to(torch.uint8)    # (batch, height, width, channels)로 변경
         out_img = (out_image.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255).to(torch.uint8)
         imgs = [in_img, out_img]
 
