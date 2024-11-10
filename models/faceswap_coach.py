@@ -156,12 +156,12 @@ class FaceSwapCoach:
         yhat_codes = [y_ws[:, :start_layer]]
         for i in range(start_layer, start_layer + leng):
             i = i - start_layer
-            MLP = self.MLPs[i]
-            rho = acti(MLP(torch.cat([x_codes[i], y_codes[i]], dim=2)))
+            MLP = self.MLPs[i]        # 각 rho를 계산할 때마다 다른 MLP 이용
+            rho = acti(MLP(torch.cat([x_codes[i], y_codes[i]], dim=2)))       # dim=2로 concat, 1024-dim
             yhat_codes.append(y_codes[i] * rho + x_codes[i] * (1 - rho))
 
         yhat_codes.append(y_ws[:, start_layer + leng:])
-        ws = torch.cat(yhat_codes, dim=1)
+        ws = torch.cat(yhat_codes, dim=1)        # dim=1로 concat -> (B, 14, 512)
 
         return ws
 
@@ -259,16 +259,17 @@ class FaceSwapCoach:
 
         mask = F.interpolate(gen_mask().unsqueeze(0), size=[256, 256], mode='bilinear', align_corners=True).cuda()
 
-        x = F.interpolate(in_image, size=[256, 256], mode='bilinear', align_corners=True)
-        y = F.interpolate(out_image, size=[256, 256], mode='bilinear', align_corners=True)
-        x_ws, y_ws = self.inversion(x, y)
+        x = F.interpolate(in_image, size=[256, 256], mode='bilinear', align_corners=True)    # 256으로 resize, x=source
+        y = F.interpolate(out_image, size=[256, 256], mode='bilinear', align_corners=True)   # y=target
+        x_ws, y_ws = self.inversion(x, y)        # pSp GradualStyleEncoder로 inversion, (B, 14, 512)
 
-        self.decoder.train()
+        self.decoder.train()        # TriPlaneGenerator(StyleGAN2 + neural_renderer) train
         optimizer = configure_optimizers(self.decoder, args.lr)
 
+        # x, y의 inversion으로 G 학습
         for _ in tqdm(range(args.epoch)):
-            x_rec, y_rec = self.synthesis_inversion(x_ws, y_ws, in_cp, out_cp)
-            loss = self.cal_loss_rec(x, y, x_rec, y_rec)
+            x_rec, y_rec = self.synthesis_inversion(x_ws, y_ws, in_cp, out_cp)        # (512, 512)
+            loss = self.cal_loss_rec(x, y, x_rec, y_rec)        
 
             optimizer.zero_grad()
             loss.backward()
@@ -277,8 +278,9 @@ class FaceSwapCoach:
         ws = None
         optimizer = configure_optimizers(self.decoder, args.lr / 10)
 
+        # ws로 G 학습
         for _ in tqdm(range(args.epoch)):
-            ws = self.latent_interpolation(x_ws, y_ws)
+            ws = self.latent_interpolation(x_ws, y_ws)    # 0~4까지는 target code(y_ws), 5~9까지는 mixing, 10~13까지는 target code / (B, 14, 512)
             y_hat_out, y_hat_in = self.synthesis_faceswap(ws, in_cp, out_cp)
             loss = self.cal_loss_fs(x, y, y_hat_out, y_hat_in, mask)
 
